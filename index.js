@@ -541,12 +541,13 @@ async function loadSchedule() {
   rule.second = 0;
   rule.tz = "Asia/Ho_Chi_Minh";
   schedule.scheduleJob(rule, async () => {
-    const currentTime = dayjs().format("HH:mm");
+    const currentTime = dayjs().tz("Asia/Ho_Chi_Minh").format("HH:mm");
     console.log(`Schedule: ${currentTime}`);
     const usersToNotify = await userModel.find({ time: `${currentTime}` });
     usersToNotify.forEach((user) => {
       if (!user.enable) return;
       const today = dayjs().tz("Asia/Ho_Chi_Minh").day()+1;
+
       if (today == 7) return;
       const content = [
         `<b>Thông báo thời khóa biểu ngày mai của lớp ${user.className}</b>\n`,

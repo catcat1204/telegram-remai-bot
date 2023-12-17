@@ -120,6 +120,15 @@ async function handleTkbCommand(msg, match) {
   if (!botData) {
     botData = await generateBotData();
   }
+  if (Object.keys(botData.datas).length == 0) {
+    return bot.sendMessage(
+      chatId,
+      "Hmm, có vẻ dữ liệu của tớ chưa được cập nhập, hãy thử lại sau nhé!",
+      {
+        parse_mode: "HTML",
+      }
+    );
+  }
   if (!classList.includes(className)) {
     return bot.sendMessage(
       chatId,
@@ -129,36 +138,52 @@ async function handleTkbCommand(msg, match) {
       }
     );
   }
-  if (/(10|11|12)A[1-8]/.test(className)) {
-    className = className.match(/(10|11|12)A[1-8]/g)[0];
-    content += `<b>Thời khóa biểu lớp ${className}</b>\n\n`;
-    if (/[2-7]/.test(day)) {
-      day = day.match(/[2-7]/g)[0];
-      content += `———— <b>Thứ ${day}</b> ————\n`;
-      content += botData.datas[className][day]
-        .map((e, i) => `Tiết ${i + 1} - ${e}`)
-        .join("\n");
-      bot.sendMessage(chatId, content, {
-        parse_mode: "HTML",
-      });
+  try {
+    if (/(10|11|12)A[1-8]/.test(className)) {
+      className = className.match(/(10|11|12)A[1-8]/g)[0];
+      content += `<b>Thời khóa biểu lớp ${className}</b>\n`;
+      content += `<b>Dữ liệu được cập nhập nhật vào lúc</b>: ${dayjs(
+        botData.updatedAt
+      )
+        .tz("Asia/Ho_Chi_Minh")
+        .format("HH:mm DD/MM/YYYY")}\n\n`;
+      if (/[2-7]/.test(day)) {
+        day = day.match(/[2-7]/g)[0];
+        content += `———— <b>Thứ ${day}</b> ————\n`;
+        content += botData.datas[className][day]
+          .map((e, i) => `Tiết ${i + 1} - ${e}`)
+          .join("\n");
+        bot.sendMessage(chatId, content, {
+          parse_mode: "HTML",
+        });
+      } else {
+        Object.keys(botData.datas[className]).forEach((day) => {
+          content +=
+            `———— <b>Thứ ${day}</b> ————` +
+            "\n" +
+            botData.datas[className][day]
+              .map((e, i) => `Tiết ${i + 1} - ${e}`)
+              .join("\n") +
+            "\n\n";
+        });
+        bot.sendMessage(chatId, content, {
+          parse_mode: "HTML",
+        });
+      }
     } else {
-      Object.keys(botData.datas[className]).forEach((day) => {
-        content +=
-          `———— <b>Thứ ${day}</b> ————` +
-          "\n" +
-          botData.datas[className][day]
-            .map((e, i) => `Tiết ${i + 1} - ${e}`)
-            .join("\n") +
-          "\n\n";
-      });
-      bot.sendMessage(chatId, content, {
-        parse_mode: "HTML",
-      });
+      return bot.sendMessage(
+        chatId,
+        "Hmm, có vẻ tên lớp mà bạn nhập không hợp lệ, hãy thử nhập đúng cú pháp /tkb (tên lớp) (thứ 2-7)\n<b>Ví dụ</b>: /tkb 10A5 2",
+        {
+          parse_mode: "HTML",
+        }
+      );
     }
-  } else {
+  } catch (err) {
+    console.log(err);
     return bot.sendMessage(
       chatId,
-      "Hmm, có vẻ tên lớp mà bạn nhập không hợp lệ, hãy thử nhập đúng cú pháp /tkb (tên lớp) (thứ 2-7)\n<b>Ví dụ</b>: /tkb 10A5 2",
+      "Hmm, có vẻ dữ liệu của tớ chưa được cập nhập, hãy thử lại sau nhé!",
       {
         parse_mode: "HTML",
       }
@@ -174,24 +199,25 @@ async function handleDocument(msg) {
   const fileId = msg.document.file_id;
   const file = await bot.getFile(fileId);
   const fileUrl = `https://api.telegram.org/file/bot${process.env.botTOKEN}/${file.file_path}`;
-  docxTables({
-    file: fileUrl,
-  })
-    .then(async (data) => {
-      let botData = await botModel.findOne({
-        botId: "remaibot",
-      });
-      if (!botData) {
-        botData = await generateBotData();
-      }
-      botData.datas = formatData(data);
-      await botData.save();
-      bot.sendMessage(chatId, "Đã lưu dữ liệu mới!");
-    })
-    .catch((error) => {
-      console.error(error);
-      bot.sendMessage(chatId, "Có lỗi xảy ra vui lòng thử lại!");
+  try {
+    let _msg = await bot.sendMessage(chatId, "⌛ Đang cập nhập dữ liệu mới...");
+    const data = await docxTables({
+      file: fileUrl,
     });
+    let botData = await botModel.findOne({
+      botId: "remaibot",
+    });
+    if (!botData) {
+      botData = await generateBotData();
+    }
+    botData.datas = formatData(data);
+    await botData.save();
+    await bot.deleteMessage(chatId, _msg.message_id);
+    return bot.sendMessage(chatId, "🚀 Đã lưu dữ liệu mới!");
+  } catch (err) {
+    console.error(error);
+    bot.sendMessage(chatId, "Có lỗi xảy ra vui lòng thử lại!");
+  }
 }
 
 async function handleChangeTimeCommand(msg) {
@@ -475,11 +501,10 @@ async function generateBotData() {
 
 async function loadSchedule() {
   console.log("Load schedule...");
-  const datas = (
-    await botModel.findOne({
-      botId: "remaibot",
-    })
-  ).datas;
+  let botData = await botModel.findOne({
+    botId: "remaibot",
+  });
+  if (!botData) return;
   const rule = new schedule.RecurrenceRule();
   rule.second = 0;
   rule.tz = "Asia/Ho_Chi_Minh";
@@ -497,7 +522,7 @@ async function loadSchedule() {
         `———— <b>Thứ ${today + 1}</b> ————`,
       ];
       content.push(
-        ...datas[user.className][today + 1].map(
+        ...datas[user.className[1]][user.className][today + 1].map(
           (e, i) => `Tiết ${i + 1} - ${e}`
         )
       );

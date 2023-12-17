@@ -13,13 +13,45 @@ const delay = require("delay");
 const dayjs = require("dayjs");
 const utc = require("dayjs/plugin/utc");
 const timezone = require("dayjs/plugin/timezone");
-
 dayjs.extend(utc);
 dayjs.extend(timezone);
 const docxTables = require("./docx-tables.js");
 
+// Constants
 const timeList = ["05:00", "06:00", "18:00", "19:00", "20:00"];
-const classList = (() => {
+const classList = generateClassList();
+const removeKeyboard = {
+  parse_mode: "HTML",
+  reply_markup: { remove_keyboard: true },
+};
+
+// Connect to MongoDB
+mongoose
+  .connect(process.env.MONGODB)
+  .then(() => console.log("Connected to MongoDB"))
+  .catch((err) => console.log(err));
+
+// Server setup
+app.use(express.json());
+app.get("/", (req, res) => res.send("Hello World"));
+app.listen(process.env.PORT, () => {
+  console.log(`Server is listening at http://localhost:${process.env.PORT}`);
+  loadSchedule();
+});
+
+// Telegram Bot setup
+let answerCallbacks = {};
+bot.onText(/\/start/, handleStartCommand);
+bot.onText(/\/tkb (.+)/, handleTkbCommand);
+bot.on("document", handleDocument);
+bot.onText(/\/changetime/, handleChangeTimeCommand);
+bot.onText(/\/changeclass/, handleChangeClassCommand);
+bot.on("callback_query", handleCallbackQuery);
+bot.onText(/\/help/, handleHelpCommand);
+bot.on("message", handleMessage);
+
+// Helper functions
+function generateClassList() {
   let c = [];
   for (let i = 0; i <= 2; i++) {
     for (let j = 1; j <= 8; j++) {
@@ -27,32 +59,9 @@ const classList = (() => {
     }
   }
   return c;
-})();
+}
 
-/** Database */
-mongoose
-  .connect(process.env.MONGODB)
-  .then(() => {
-    console.log("Connected to MongoDB");
-  })
-  .catch((err) => {
-    console.log(err);
-  });
-
-/** Server */
-app.use(express.json());
-app.get("/", function (req, res) {
-  res.send("Hello World");
-});
-
-app.listen(process.env.PORT, function listen() {
-  console.log(`Server is listening at http://localhost:${process.env.PORT}`);
-  loadSchedule();
-});
-
-/** Telegram Bot */
-let answerCallbacks = {};
-bot.onText(/\/start/, async (msg) => {
+async function handleStartCommand(msg) {
   const chatId = msg.chat.id;
   let userData = await userModel.findOne({
     chatId: chatId,
@@ -89,9 +98,9 @@ bot.onText(/\/start/, async (msg) => {
     },
     parse_mode: "HTML",
   });
-});
+}
 
-bot.onText(/\/tkb (.+)/, async (msg, match) => {
+async function handleTkbCommand(msg, match) {
   const chatId = msg.chat.id;
   let className = match[1].split(" ")[0].toUpperCase();
   let day = match[1].split(" ")[1] || "none";
@@ -120,98 +129,31 @@ bot.onText(/\/tkb (.+)/, async (msg, match) => {
       }
     );
   }
-  let datas = botData.datas;
-  if (/(10|11|12)A[1-8]/g.test(className)) {
+  if (/(10|11|12)A[1-8]/.test(className)) {
     className = className.match(/(10|11|12)A[1-8]/g)[0];
     content += `<b>Thời khóa biểu lớp ${className}</b>\n\n`;
-    switch (className[1]) {
-      case "0":
-        data = datas[0];
-        if (/[2-7]/g.test(day)) {
-          day = day.match(/[2-7]/g)[0];
-          content += `———— <b>Thứ ${day}</b> ————\n`;
-          content += data[className][day]
+    if (/[2-7]/.test(day)) {
+      day = day.match(/[2-7]/g)[0];
+      content += `———— <b>Thứ ${day}</b> ————\n`;
+      content += botData.datas[className][day]
+        .map((e, i) => `Tiết ${i + 1} - ${e}`)
+        .join("\n");
+      bot.sendMessage(chatId, content, {
+        parse_mode: "HTML",
+      });
+    } else {
+      Object.keys(botData.datas[className]).forEach((day) => {
+        content +=
+          `———— <b>Thứ ${day}</b> ————` +
+          "\n" +
+          botData.datas[className][day]
             .map((e, i) => `Tiết ${i + 1} - ${e}`)
-            .join("\n");
-          bot.sendMessage(chatId, content, {
-            parse_mode: "HTML",
-          });
-        } else {
-          Object.keys(data[className]).forEach((day) => {
-            content +=
-              `———— <b>Thứ ${day}</b> ————` +
-              "\n" +
-              data[className][day]
-                .map((e, i) => `Tiết ${i + 1} - ${e}`)
-                .join("\n") +
-              "\n\n";
-          });
-          bot.sendMessage(chatId, content, {
-            parse_mode: "HTML",
-          });
-        }
-        break;
-      case "1":
-        data = datas[1];
-        if (/[2-7]/g.test(day)) {
-          day = day.match(/[2-7]/g)[0];
-          content += `———— <b>Thứ ${day}</b> ————\n`;
-          content += data[className][day]
-            .map((e, i) => `Tiết ${i + 1} - ${e}`)
-            .join("\n");
-          bot.sendMessage(chatId, content, {
-            parse_mode: "HTML",
-          });
-        } else {
-          Object.keys(data[className]).forEach((day) => {
-            content +=
-              `———— <b>Thứ ${day}</b> ————` +
-              "\n" +
-              data[className][day]
-                .map((e, i) => `Tiết ${i + 1} - ${e}`)
-                .join("\n") +
-              "\n\n";
-          });
-          bot.sendMessage(chatId, content, {
-            parse_mode: "HTML",
-          });
-        }
-        break;
-      case "2":
-        data = datas[2];
-        if (/[2-7]/g.test(day)) {
-          day = day.match(/[2-7]/g)[0];
-          content += `———— <b>Thứ ${day}</b> ————\n`;
-          content += data[className][day]
-            .map((e, i) => `Tiết ${i + 1} - ${e}`)
-            .join("\n");
-          bot.sendMessage(chatId, content, {
-            parse_mode: "HTML",
-          });
-        } else {
-          Object.keys(data[className]).forEach((day) => {
-            content +=
-              `———— <b>Thứ ${day}</b> ———— ` +
-              "\n" +
-              data[className][day]
-                .map((e, i) => `Tiết ${i + 1} - ${e}`)
-                .join("\n") +
-              "\n\n";
-          });
-          bot.sendMessage(chatId, content, {
-            parse_mode: "HTML",
-          });
-        }
-        break;
-      default:
-        bot.sendMessage(
-          chatId,
-          "Hmm, có vẻ tên lớp mà bạn nhập không hợp lệ, hãy thử nhập đúng cú pháp /tkb (tên lớp) (thứ 2-7)\n<b>Ví dụ</b>: /tkb 10A5 2",
-          {
-            parse_mode: "HTML",
-          }
-        );
-        break;
+            .join("\n") +
+          "\n\n";
+      });
+      bot.sendMessage(chatId, content, {
+        parse_mode: "HTML",
+      });
     }
   } else {
     return bot.sendMessage(
@@ -222,9 +164,9 @@ bot.onText(/\/tkb (.+)/, async (msg, match) => {
       }
     );
   }
-});
+}
 
-bot.on("document", async (msg) => {
+async function handleDocument(msg) {
   const chatId = msg.chat.id;
   if (chatId != process.env.OWNER_ID) {
     return;
@@ -242,11 +184,7 @@ bot.on("document", async (msg) => {
       if (!botData) {
         botData = await generateBotData();
       }
-      botData.datas = [
-        formatData(data[0]),
-        formatData(data[1]),
-        formatData(data[2]),
-      ];
+      botData.datas = formatData(data);
       await botData.save();
       bot.sendMessage(chatId, "Đã lưu dữ liệu mới!");
     })
@@ -254,9 +192,9 @@ bot.on("document", async (msg) => {
       console.error(error);
       bot.sendMessage(chatId, "Có lỗi xảy ra vui lòng thử lại!");
     });
-});
+}
 
-bot.onText(/\/changetime/, async (msg) => {
+async function handleChangeTimeCommand(msg) {
   let userData = await userModel.findOne({
     chatId: msg.chat.id,
   });
@@ -286,41 +224,43 @@ bot.onText(/\/changetime/, async (msg) => {
       }
     );
   }
-  bot
-    .sendMessage(msg.chat.id, "Hãy chọn thời gian mà bạn muốn tớ gửi thông báo cho bạn~", {
-      reply_markup: {
-        keyboard: [timeList],
-        resize_keyboard: true,
-        one_time_keyboard: true,
-      },
-    })
-    .then(() => {
-      answerCallbacks[msg.chat.id] = async (answer) => {
-        let time = answer.text;
-        if (!timeList.includes(time))
+  if (userData && userData.enable) {
+    bot
+      .sendMessage(
+        msg.chat.id,
+        "Hãy chọn thời gian mà bạn muốn tớ gửi thông báo cho bạn~",
+        {
+          reply_markup: {
+            keyboard: [timeList],
+            resize_keyboard: true,
+            one_time_keyboard: true,
+          },
+        }
+      )
+      .then(() => {
+        answerCallbacks[msg.chat.id] = async (answer) => {
+          let time = answer.text;
+          if (!timeList.includes(time))
+            return bot.sendMessage(
+              msg.chat.id,
+              `Bạn hay thử lại với danh sách thời gian hợp lệ sau ${timeList
+                .map((e) => `<b>${e}</b>`)
+                .join(", ")}`,
+              removeKeyboard
+            );
+          userData.time = time;
+          await userData.save();
           return bot.sendMessage(
             msg.chat.id,
-            `Bạn hay thử lại với danh sách thời gian hợp lệ sau ${timeList
-              .map((e) => `<b>${e}</b>`)
-              .join(", ")}`,
-            {
-              parse_mode: "HTML",
-            }
+            `Bạn đã thay đổi thành công, tớ sẽ gửi thời khoá biểu cho bạn vào lúc <b>${time}</b>`,
+            removeKeyboard
           );
-        userData.time = time;
-        await userData.save();
-        return bot.sendMessage(
-          msg.chat.id,
-          `Bạn đã thay đổi thành công, tớ sẽ gửi thời khoá biểu cho bạn vào lúc <b>${time}</b>`,
-          {
-            parse_mode: "HTML",
-          }
-        );
-      };
-    });
-});
+        };
+      });
+  }
+}
 
-bot.onText(/\/changeclass/, async (msg) => {
+async function handleChangeClassCommand(msg) {
   let userData = await userModel.findOne({
     chatId: msg.chat.id,
   });
@@ -365,44 +305,47 @@ bot.onText(/\/changeclass/, async (msg) => {
           return bot.sendMessage(
             msg.chat.id,
             `Tên hợp của bạn không hợp lệ, hãy thử lại với các tên lớp như sau\nVd: 10A5, 11A1, 12A1,...`,
-            {
-              parse_mode: "HTML",
-            }
+            removeKeyboard
           );
         userData.className = className;
         await userData.save();
         return bot.sendMessage(
           msg.chat.id,
           `Bạn đã thay đổi thành công, tớ sẽ gửi thông báo thời khoá biểu của lớp <b>${className}</b>`,
-          {
-            parse_mode: "HTML",
-          }
+          removeKeyboard
         );
       };
     });
-});
+}
 
-bot.on("callback_query", async (callbackQuery) => {
+async function handleCallbackQuery(callbackQuery) {
   const chatId = callbackQuery.message.chat.id;
   const data = callbackQuery.data;
   if (data === "register") {
     await delay(200);
     bot.deleteMessage(chatId, callbackQuery.message.message_id);
     bot
-      .sendMessage(chatId, "Hãy chọn thời gian mà bạn muốn tớ gửi thông báo cho bạn~", {
-        reply_markup: {
-          keyboard: [timeList],
-          resize_keyboard: true,
-          one_time_keyboard: true,
-        },
-      })
+      .sendMessage(
+        chatId,
+        "Hãy chọn thời gian mà bạn muốn tớ gửi thông báo cho bạn~",
+        {
+          reply_markup: {
+            keyboard: [timeList],
+            resize_keyboard: true,
+            one_time_keyboard: true,
+          },
+        }
+      )
       .then(() => {
         answerCallbacks[callbackQuery.message.chat.id] = async (answer) => {
           let time = answer.text;
           if (!timeList.includes(time))
-            return bot.sendMessage(chatId, `Bạn hay thử lại với danh sách thời gian hợp lệ sau ${timeList
-              .map((e) => `<b>${e}</b>`)
-              .join(", ")}`);
+            return bot.sendMessage(
+              chatId,
+              `Bạn hay thử lại với danh sách thời gian hợp lệ sau ${timeList
+                .map((e) => `<b>${e}</b>`)
+                .join(", ")}`
+            );
           bot
             .sendMessage(
               callbackQuery.message.chat.id,
@@ -423,7 +366,8 @@ bot.on("callback_query", async (callbackQuery) => {
                 if (!classList.includes(className))
                   return bot.sendMessage(
                     chatId,
-                    "Tên hợp của bạn không hợp lệ, hãy thử lại với các tên lớp như sau\nVd: 10A5, 11A1, 12A1,..."
+                    "Tên hợp của bạn không hợp lệ, hãy thử lại với các tên lớp như sau\nVd: 10A5, 11A1, 12A1,...",
+                    removeKeyboard
                   );
                 let userData = new userModel({
                   chatId: callbackQuery.message.chat.id,
@@ -435,9 +379,7 @@ bot.on("callback_query", async (callbackQuery) => {
                 return bot.sendMessage(
                   chatId,
                   `Đăng ký thành công!, tớ sẽ gửi thời khóa biểu của lớp <b>${className}</b> vào lúc <b>${time}</b> cho bạn 🥰`,
-                  {
-                    parse_mode: "HTML",
-                  }
+                  removeKeyboard
                 );
               };
             });
@@ -460,9 +402,9 @@ bot.on("callback_query", async (callbackQuery) => {
     await userData.save();
     bot.sendMessage(chatId, "Đã tắt thông báo thời khoá biểu!");
   }
-});
+}
 
-bot.onText(/\/help/, async (msg) => {
+async function handleHelpCommand(msg) {
   const chatId = msg.chat.id;
   let content = [
     "<b>Danh sách các lệnh của Remai~</b>\n",
@@ -470,44 +412,45 @@ bot.onText(/\/help/, async (msg) => {
     "<b>/changeclass</b> - Thay đổi lớp",
     "<b>/changetime</b> - Thay đổi thời gian",
     "<b>/help</b> - Danh sách lệnh",
-    "<b>/tkb</b> (tên lớp) (thứ) - Đăng ký",
+    "<b>/tkb</b> (tên lớp) (thứ) - Xem thời khoá biểu của lớp",
   ];
 
   bot.sendMessage(chatId, content.join("\n"), {
     parse_mode: "HTML",
   });
-});
-
-bot.on("message", function (message) {
+}
+bot.onText(/\/changeclass/, async (msg) => {});
+function handleMessage(message) {
   var callback = answerCallbacks[message.chat.id];
   if (callback) {
     delete answerCallbacks[message.chat.id];
     return callback(message);
   }
-});
+}
 
-function formatData(table) {
+function formatData(data) {
   let datas = {};
-  // get class name
-  for (let i = 2; i < table["0"].length; i++) {
-    datas[table["0"][i].data.replace(/\n/g, "")] = {};
-  }
-  for (let i of Object.keys(datas)) {
-    for (let j = 2; j <= 7; j++) {
-      datas[i][j] = [];
+  for (let table of data) {
+    // get class name
+    for (let i = 2; i < table["0"].length; i++) {
+      let className = table["0"][i].data.replace(/\n/g, "");
+      datas[className] = {};
+      for (let j = 2; j <= 7; j++) {
+        datas[className][j] = [];
+      }
     }
-  }
-  // get data
-  let thu = "";
-  let lop = "";
-  for (let i = 1; i < Object.keys(table).length; i++) {
-    for (let j = 0; j < table[`${i}`].length; j++) {
-      if (j == 0 && table[`${i}`][j].data != "") {
-        thu = table[`${i}`][j].data.replace(/\n/g, "");
-      } else if (j != 1) {
-        lop = table[`0`][j].data.replace(/\n/g, "");
-        if (lop != "") {
-          datas[lop][thu].push(table[`${i}`][j].data.replace(/\n/g, ""));
+    // get data
+    let thu = "";
+    let lop = "";
+    for (let i = 1; i < Object.keys(table).length; i++) {
+      for (let j = 0; j < table[`${i}`].length; j++) {
+        if (j == 0 && table[`${i}`][j].data != "") {
+          thu = table[`${i}`][j].data.replace(/\n/g, "");
+        } else if (j != 1) {
+          lop = table[`0`][j].data.replace(/\n/g, "");
+          if (lop != "") {
+            datas[lop][thu].push(table[`${i}`][j].data.replace(/\n/g, ""));
+          }
         }
       }
     }
@@ -523,7 +466,7 @@ async function generateBotData() {
     botData = new botModel({
       botId: "remaibot",
       chatsId: [],
-      datas: [],
+      datas: {},
     });
     await botData.save();
   }
@@ -546,7 +489,7 @@ async function loadSchedule() {
     const usersToNotify = await userModel.find({ time: `${currentTime}` });
     usersToNotify.forEach((user) => {
       if (!user.enable) return;
-      const today = dayjs().tz("Asia/Ho_Chi_Minh").day()+1;
+      const today = dayjs().tz("Asia/Ho_Chi_Minh").day() + 1;
 
       if (today == 7) return;
       const content = [
@@ -554,7 +497,7 @@ async function loadSchedule() {
         `———— <b>Thứ ${today + 1}</b> ————`,
       ];
       content.push(
-        ...datas[user.className[1]][user.className][today + 1].map(
+        ...datas[user.className][today + 1].map(
           (e, i) => `Tiết ${i + 1} - ${e}`
         )
       );

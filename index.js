@@ -518,7 +518,10 @@ async function loadSchedule() {
 
       if (today == 7) return;
       const content = [
-        `<b>Thông báo thời khóa biểu ngày mai của lớp ${user.className}</b>\n`,
+        `<b>Thông báo thời khóa biểu ngày mai của lớp ${user.className}</b>`,
+        `<b>Dữ liệu được cập nhập nhật vào lúc</b>: ${dayjs(botData.updatedAt)
+          .tz("Asia/Ho_Chi_Minh")
+          .format("HH:mm DD/MM/YYYY")}\n`,
         `———— <b>Thứ ${today + 1}</b> ————`,
       ];
       content.push(

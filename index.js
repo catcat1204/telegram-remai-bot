@@ -522,7 +522,7 @@ async function loadSchedule() {
         `———— <b>Thứ ${today + 1}</b> ————`,
       ];
       content.push(
-        ...datas[user.className[1]][user.className][today + 1].map(
+        ...datas[user.className][today + 1].map(
           (e, i) => `Tiết ${i + 1} - ${e}`
         )
       );

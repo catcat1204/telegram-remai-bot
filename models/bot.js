@@ -2,7 +2,10 @@ const mongoose = require("mongoose");
 const schema = new mongoose.Schema(
   {
     botId: String,
-    datas: Object,
+    tksDatas: Object,
+    tkcDatas: Object,
+    tksUpdateAt: Date,
+    tkcUpdateAt: Date,
   },
   { timestamps: true }
 );

@@ -527,6 +527,7 @@ async function handleHelpCommand(msg) {
     "<b>/changetime</b> - Thay đổi thời gian",
     "<b>/help</b> - Danh sách lệnh",
     "<b>/tkb</b> (tên lớp) (thứ) - Xem thời khoá biểu của lớp",
+    "<b>/tkbc</b> (tên lớp) - Xem thời khoá biểu buổi chiều của lớp",
   ];
 
   bot.sendMessage(chatId, content.join("\n"), {

@@ -43,6 +43,9 @@ app.listen(process.env.PORT, () => {
 let answerCallbacks = {};
 bot.onText(/\/start/, handleStartCommand);
 bot.onText(/\/tkb (.+)/, handleTkbCommand);
+bot.onText(/\/t (.+)/, handleTkbCommand);
+bot.onText(/\/tkbc (.+)/, handleTkbcCommand);
+bot.onText(/\/tc (.+)/, handleTkbcCommand);
 bot.on("document", handleDocument);
 bot.onText(/\/changetime/, handleChangeTimeCommand);
 bot.onText(/\/changeclass/, handleChangeClassCommand);
@@ -103,8 +106,8 @@ async function handleStartCommand(msg) {
 async function handleTkbCommand(msg, match) {
   const chatId = msg.chat.id;
   let className = match[1].split(" ")[0].toUpperCase();
-  let day = match[1].split(" ")[1] || "none";
-  if (day != "none" && !/[2-7]/g.test(day)) {
+  let day = match[1].split(" ")[1] || "";
+  if (!/[2-7]/g.test(day) || day.length > 1) {
     return bot.sendMessage(
       chatId,
       "Hmm, có vẻ thứ mà bạn nhập không hợp lệ, hãy thử nhập đúng cú pháp /tkb (tên lớp) (thứ 2-7)\n<b>Ví dụ</b>: /tkb 10A5 2",
@@ -120,7 +123,7 @@ async function handleTkbCommand(msg, match) {
   if (!botData) {
     botData = await generateBotData();
   }
-  if (Object.keys(botData.datas).length == 0) {
+  if (Object.keys(botData.tksDatas).length == 0) {
     return bot.sendMessage(
       chatId,
       "Hmm, có vẻ dữ liệu của tớ chưa được cập nhập, hãy thử lại sau nhé!",
@@ -143,25 +146,25 @@ async function handleTkbCommand(msg, match) {
       className = className.match(/(10|11|12)A[1-8]/g)[0];
       content += `<b>Thời khóa biểu lớp ${className}</b>\n`;
       content += `<b>Dữ liệu được cập nhập nhật vào lúc</b>: ${dayjs(
-        botData.updatedAt
+        botData.tksUpdateAt
       )
         .tz("Asia/Ho_Chi_Minh")
         .format("HH:mm DD/MM/YYYY")}\n\n`;
       if (/[2-7]/.test(day)) {
         day = day.match(/[2-7]/g)[0];
         content += `———— <b>Thứ ${day}</b> ————\n`;
-        content += botData.datas[className][day]
+        content += botData.tksDatas[className][day]
           .map((e, i) => `Tiết ${i + 1} - ${e}`)
           .join("\n");
         bot.sendMessage(chatId, content, {
           parse_mode: "HTML",
         });
       } else {
-        Object.keys(botData.datas[className]).forEach((day) => {
+        Object.keys(botData.tksDatas[className]).forEach((day) => {
           content +=
             `———— <b>Thứ ${day}</b> ————` +
             "\n" +
-            botData.datas[className][day]
+            botData.tksDatas[className][day]
               .map((e, i) => `Tiết ${i + 1} - ${e}`)
               .join("\n") +
             "\n\n";
@@ -191,12 +194,85 @@ async function handleTkbCommand(msg, match) {
   }
 }
 
+async function handleTkbcCommand(msg, match) {
+  const chatId = msg.chat.id;
+  let className = match[1].split(" ")[0].toUpperCase();
+  let content = "";
+  let botData = await botModel.findOne({
+    botId: "remaibot",
+  });
+  if (!botData) {
+    botData = await generateBotData();
+  }
+  if (Object.keys(botData.tkcDatas).length == 0) {
+    return bot.sendMessage(
+      chatId,
+      "Hmm, có vẻ dữ liệu của tớ chưa được cập nhập, hãy thử lại sau nhé!",
+      {
+        parse_mode: "HTML",
+      }
+    );
+  }
+  if (!classList.includes(className)) {
+    return bot.sendMessage(
+      chatId,
+      "Hmm, có vẻ tên lớp mà bạn nhập không hợp lệ, hãy thử nhập đúng cú pháp \n/tkb (tên lớp) (thứ 2-7)\n<b>Ví dụ</b>: /tkb 10A5 2",
+      {
+        parse_mode: "HTML",
+      }
+    );
+  }
+  try {
+    if (/(10|11|12)A[1-8]/.test(className)) {
+      className = className.match(/(10|11|12)A[1-8]/g)[0];
+      content += `<b>Thời khóa biểu buổi chiều của lớp ${className}</b>\n`;
+      content += `<b>Dữ liệu được cập nhập nhật vào lúc</b>: ${dayjs(
+        botData.tkcUpdateAt
+      )
+        .tz("Asia/Ho_Chi_Minh")
+        .format("HH:mm DD/MM/YYYY")}\n\n`;
+
+      Object.keys(botData.tkcDatas[className]).forEach((day) => {
+        content += `<b>Thứ ${day}</b>: ${botData.tkcDatas[className][day][0]}${
+          parseInt(day) == dayjs().tz("Asia/Ho_Chi_Minh").day()
+            ? " <b>👈 Hôm nay</b>"
+            : ""
+        }\n`;
+      });
+      bot.sendMessage(chatId, content, {
+        parse_mode: "HTML",
+      });
+    } else {
+      return bot.sendMessage(
+        chatId,
+        "Hmm, có vẻ tên lớp mà bạn nhập không hợp lệ, hãy thử nhập đúng cú pháp /tkb (tên lớp) (thứ 2-7)\n<b>Ví dụ</b>: /tkb 10A5 2",
+        {
+          parse_mode: "HTML",
+        }
+      );
+    }
+  } catch (err) {
+    console.log(err);
+    return bot.sendMessage(
+      chatId,
+      "Hmm, có vẻ dữ liệu của tớ chưa được cập nhập, hãy thử lại sau nhé!",
+      {
+        parse_mode: "HTML",
+      }
+    );
+  }
+}
+
 async function handleDocument(msg) {
   const chatId = msg.chat.id;
   if (chatId != process.env.OWNER_ID) {
     return;
   }
   const fileId = msg.document.file_id;
+  const type = msg.document.file_name.toLowerCase().includes("thêm")
+    ? "chieu"
+    : "sang";
+
   const file = await bot.getFile(fileId);
   const fileUrl = `https://api.telegram.org/file/bot${process.env.botTOKEN}/${file.file_path}`;
   try {
@@ -210,12 +286,24 @@ async function handleDocument(msg) {
     if (!botData) {
       botData = await generateBotData();
     }
-    botData.datas = formatData(data);
+    if (type == "sang") {
+      botData.tksDatas = formatData(data);
+    } else botData.tkcDatas = formatData2(data);
+    botData.tksUpdateAt = Date.now();
+    botData.tkcUpdateAt = Date.now();
     await botData.save();
     await bot.deleteMessage(chatId, _msg.message_id);
-    return bot.sendMessage(chatId, "🚀 Đã lưu dữ liệu mới!");
+    return bot.sendMessage(
+      chatId,
+      `🚀 Đã lưu dữ liệu mới cho <b>TKB ${
+        type == "sang" ? "sáng" : "chiều"
+      }</b>!`,
+      {
+        parse_mode: "HTML",
+      }
+    );
   } catch (err) {
-    console.error(error);
+    console.error(err);
     bot.sendMessage(chatId, "Có lỗi xảy ra vui lòng thử lại!");
   }
 }
@@ -459,7 +547,7 @@ function formatData(data) {
   for (let table of data) {
     // get class name
     for (let i = 2; i < table["0"].length; i++) {
-      let className = table["0"][i].data.replace(/\n/g, "");
+      let className = table["0"][i].data;
       datas[className] = {};
       for (let j = 2; j <= 7; j++) {
         datas[className][j] = [];
@@ -471,13 +559,56 @@ function formatData(data) {
     for (let i = 1; i < Object.keys(table).length; i++) {
       for (let j = 0; j < table[`${i}`].length; j++) {
         if (j == 0 && table[`${i}`][j].data != "") {
-          thu = table[`${i}`][j].data.replace(/\n/g, "");
+          thu = table[`${i}`][j].data;
         } else if (j != 1) {
-          lop = table[`0`][j].data.replace(/\n/g, "");
+          lop = table[`0`][j].data;
           if (lop != "") {
-            datas[lop][thu].push(table[`${i}`][j].data.replace(/\n/g, ""));
+            datas[lop][thu].push(
+              table[`${i}`][j].data.length > 1 ? table[`${i}`][j].data : "Nghỉ"
+            );
           }
         }
+      }
+    }
+  }
+  return datas;
+}
+
+function formatData2(data) {
+  let datas = {};
+  for (let table of data) {
+    // get class name
+    for (let i = 2; i < table["0"].length; i++) {
+      let className = `${table["0"][i].data.slice(0, 2)}A${i - 1}`;
+      table["0"][i].data = className;
+      datas[className] = {};
+      for (let j = 2; j <= 7; j++) {
+        datas[className][j] = [];
+      }
+    }
+    // get data
+    let thu = "";
+    let lop = "";
+    for (let i = 1; i < Object.keys(table).length; i++) {
+      for (let j = 0; j < table[`${i}`].length; j++) {
+        if (j == 0 && table[`${i}`][j].data != "") {
+          thu = table[`${i}`][j].data;
+        } else if (j != 1) {
+          lop = table[`0`][j].data;
+          if (lop != "" && table[`${i}`][j].data != "") {
+            datas[lop][thu].push(table[`${i}`][j].data);
+          }
+          if (j == table[`${i}`].length - 1 && datas[lop][thu].length == 0) {
+            datas[lop][thu].push("Nghỉ");
+          }
+        }
+      }
+    }
+  }
+  for (let i = 0; i < Object.keys(datas).length; i++) {
+    for (let j = 2; j <= 7; j++) {
+      if (datas[Object.keys(datas)[i]][j].length == 0) {
+        datas[Object.keys(datas)[i]][j].push("Nghỉ");
       }
     }
   }
@@ -492,7 +623,10 @@ async function generateBotData() {
     botData = new botModel({
       botId: "remaibot",
       chatsId: [],
-      datas: {},
+      tksDatas: {},
+      tkcDatas: {},
+      tksUpdateAt: Date.now(),
+      tkcUpdateAt: Date.now(),
     });
     await botData.save();
   }
@@ -519,15 +653,20 @@ async function loadSchedule() {
       if (today == 7) return;
       const content = [
         `<b>Thông báo thời khóa biểu ngày mai của lớp ${user.className}</b>`,
-        `<b>Dữ liệu được cập nhập nhật vào lúc</b>: ${dayjs(botData.updatedAt)
+        `<b>Dữ liệu được cập nhập nhật vào lúc</b>: ${dayjs(botData.tksUpdateAt)
           .tz("Asia/Ho_Chi_Minh")
           .format("HH:mm DD/MM/YYYY")}\n`,
         `———— <b>Thứ ${today + 1}</b> ————`,
       ];
       content.push(
-        ...botData.datas[user.className][today + 1].map(
+        ...botData.tksDatas[user.className][today + 1].map(
           (e, i) => `Tiết ${i + 1} - ${e}`
         )
+      );
+      content.push(
+        `\n<b>Lịch học buổi chiều</b>: ${
+          botData.tkcDatas[user.className][today + 1][0]
+        }`
       );
       bot.sendMessage(user.chatId, content.join("\n"), {
         parse_mode: "HTML",

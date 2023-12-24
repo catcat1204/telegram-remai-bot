@@ -107,7 +107,16 @@ async function handleTkbCommand(msg, match) {
   const chatId = msg.chat.id;
   let className = match[1].split(" ")[0].toUpperCase();
   let day = match[1].split(" ")[1] || "";
-  if (!/[2-7]/g.test(day) || day.length > 1) {
+  if (day.length > 1) {
+    return bot.sendMessage(
+      chatId,
+      "Hmm, có vẻ thứ mà bạn nhập không hợp lệ, hãy thử nhập đúng cú pháp /tkb (tên lớp) (thứ 2-7)\n<b>Ví dụ</b>: /tkb 10A5 2",
+      {
+        parse_mode: "HTML",
+      }
+    );
+  }
+  if (day.length == 1 && !/[2-7]/.test(day)) {
     return bot.sendMessage(
       chatId,
       "Hmm, có vẻ thứ mà bạn nhập không hợp lệ, hãy thử nhập đúng cú pháp /tkb (tên lớp) (thứ 2-7)\n<b>Ví dụ</b>: /tkb 10A5 2",

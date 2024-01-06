@@ -46,6 +46,10 @@ bot.onText(/\/tkb (.+)/, handleTkbCommand);
 bot.onText(/\/t (.+)/, handleTkbCommand);
 bot.onText(/\/tkbc (.+)/, handleTkbcCommand);
 bot.onText(/\/tc (.+)/, handleTkbcCommand);
+bot.onText(/\/tkb$/, handleTkbCommand);
+bot.onText(/\/t$/, handleTkbCommand);
+bot.onText(/\/tkbc$/, handleTkbcCommand);
+bot.onText(/\/tc$/, handleTkbcCommand);
 bot.on("document", handleDocument);
 bot.onText(/\/changetime/, handleChangeTimeCommand);
 bot.onText(/\/changeclass/, handleChangeClassCommand);
@@ -103,10 +107,19 @@ async function handleStartCommand(msg) {
   });
 }
 
-async function handleTkbCommand(msg, match) {
+async function handleTkbCommand(msg, match = []) {
   const chatId = msg.chat.id;
-  let className = match[1].split(" ")[0].toUpperCase();
-  let day = match[1].split(" ")[1] || "";
+  let userData = await userModel.findOne({
+    chatId: msg.chat.id,
+  });
+  let className,
+    day = "";
+  if (match.length > 1) {
+    className = match[1].toUpperCase();
+    day = match[1].split(" ")[1] || "";
+  } else if (userData && userData.className) {
+    className = userData.className;
+  } else className = "";
   if (day.length > 1) {
     return bot.sendMessage(
       chatId,
@@ -203,9 +216,17 @@ async function handleTkbCommand(msg, match) {
   }
 }
 
-async function handleTkbcCommand(msg, match) {
+async function handleTkbcCommand(msg, match = []) {
   const chatId = msg.chat.id;
-  let className = match[1].split(" ")[0].toUpperCase();
+  let userData = await userModel.findOne({
+    chatId: msg.chat.id,
+  });
+  let className;
+  if (match.length > 1) {
+    className = match[1].toUpperCase();
+  } else if (userData && userData.className) {
+    className = userData.className;
+  } else className = "";
   let content = "";
   let botData = await botModel.findOne({
     botId: "remaibot",
@@ -243,7 +264,7 @@ async function handleTkbcCommand(msg, match) {
 
       Object.keys(botData.tkcDatas[className]).forEach((day) => {
         content += `<b>Thứ ${day}</b>: ${botData.tkcDatas[className][day][0]}${
-          parseInt(day) == dayjs().tz("Asia/Ho_Chi_Minh").day()
+          parseInt(day) == dayjs().tz("Asia/Ho_Chi_Minh").day() + 1
             ? " <b>👈 Hôm nay</b>"
             : ""
         }\n`;
